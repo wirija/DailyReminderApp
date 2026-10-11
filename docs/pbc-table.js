@@ -1,0 +1,74 @@
+/* PBC rows share the project's action records. Edits commit only on Save. */
+window.renderPbcTable=function(mount,{owner,items,esc,sort,onSort,onChange,onSchedule,toast}){
+ let draft=null,original=null,commentTarget=null,importRows=null,importFile="",busy=false;
+ const columns=[['pbcId','PBC ID'],['title','Request'],['owner','Owner'],['requestDate','Request date'],['due','Due date'],['status','Status'],['comment','Comment']];
+ const states=['Open','In progress','Waiting','Done'];
+ const today=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'});
+ const stamp=()=>new Date().toLocaleString('en-GB',{timeZone:'Asia/Singapore'})+' SGT';
+ const dateLabel=s=>s?new Date(s+'T00:00:00Z').toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'}):'Not set';
+ const field=(key,type='text')=>'<input data-pbc-field="'+key+'" type="'+type+'" aria-label="'+columns.find(c=>c[0]===key)[1]+'" value="'+esc(draft[key]||'')+'">';
+ function render(){
+  const list=draft&&!original?[draft,...items]:items;
+  mount.innerHTML='<div class="mw-action-toolbar"><span>'+items.filter(a=>a.status!=='Done').length+' open · '+items.filter(a=>a.status==='Done').length+' completed</span><div class="pbc-tools"><button type="button" data-pbc-download>Download Excel template</button><button type="button" data-pbc-upload>Upload Excel</button><input type="file" data-pbc-file accept=".xlsx" aria-label="Upload PBC Excel workbook" hidden><button type="button" data-pbc-add>+ Add PBC request</button></div></div><section data-pbc-import hidden class="pbc-import" aria-live="polite"></section><p class="pbc-help">Click a row to edit. Download includes your current requests and IDs. Upload updates matching IDs; blank IDs create new requests. Comments open beside the table.</p><div class="pbc-layout"><div class="pbc-table-area"><table class="pbc-table"><thead><tr>'+columns.map(([key,title])=>'<th scope="col" aria-sort="'+(sort.key===key?(sort.direction===1?'ascending':'descending'):'none')+'"><button type="button" data-pbc-sort="'+key+'">'+title+' <span aria-hidden="true">'+(sort.key===key?(sort.direction===1?'↑':'↓'):'↕')+'</span></button></th>').join('')+'</tr></thead><tbody>'+list.map(a=>{
+   const editing=draft&&draft.id===a.id;
+   return '<tr data-pbc-row="'+esc(a.id)+'" '+(editing?'class="pbc-editing"':'tabindex="0" aria-label="Edit '+esc(a.title)+'"')+'><td data-label="PBC ID" title="'+esc(a.pbcId||'Assigned on save')+'">'+esc(a.pbcId||'Assigned on save')+'</td><td data-label="Request">'+(editing?'<div class="pbc-edit-request">'+field('title')+'<button type="button" data-pbc-save aria-label="Save request" title="Save request">✓</button><button type="button" data-pbc-cancel aria-label="Cancel editing" title="Cancel editing">×</button></div>':'<span title="'+esc(a.title)+'">'+esc(a.title)+'</span>')+'</td><td data-label="Owner">'+(editing?field('owner'):esc(a.owner||'Unassigned'))+'</td><td data-label="Request date">'+(editing?field('requestDate','date'):dateLabel(a.requestDate))+'</td><td data-label="Due date">'+(editing?field('due','date'):dateLabel(a.due))+'</td><td data-label="Status">'+(editing?'<select data-pbc-field="status" aria-label="Status">'+states.map(s=>'<option '+(draft.status===s?'selected':'')+'>'+s+'</option>').join('')+'</select>':'<span class="badge '+(a.status==='Waiting'?'warn':'')+'">'+esc(a.status)+'</span>')+'</td><td data-label="Comment"><button type="button" class="pbc-comment-preview" data-pbc-comment="'+esc(a.id)+'" title="'+esc((editing?draft.comment:a.comment)||'Add comment')+'" aria-label="Edit comment for '+esc(a.title||'new request')+'">'+esc((editing?draft.comment:a.comment)||'Add comment')+'</button></td></tr>';
+  }).join('')+'</tbody></table>'+(!list.length?'<p class="mw-empty">No PBC requests yet. Add your first request.</p>':'')+'<p class="field-error" data-pbc-error role="alert"></p></div><section class="pbc-side" data-pbc-side hidden></section></div>';
+ }
+ const error=message=>{mount.querySelector('[data-pbc-error]').textContent=message};
+ function begin(a){if(busy||importRows){error('Finish or cancel the Excel import first.');return}if(draft){error('Save or cancel the current row first.');return}original=a||null;draft=a?{...a,requestDate:a.requestDate||'',due:a.due||'',comment:a.comment||''}: {id:'pbc-draft',title:'',owner:'Peter',requestDate:today(),due:'',time:'',status:'Open',kind:'PBC',meetingId:'',comment:'',history:[]};render();mount.querySelector('[data-pbc-field="title"]').focus()}
+ function datesChanged(){return original&&(draft.due!==(original.due||'')||(draft.requestDate||'')!==(original.requestDate||''))}
+ function commit(reason=''){
+  draft.title=draft.title.trim();draft.owner=draft.owner.trim();
+  if(!draft.title||!draft.owner){error('Enter a request and an owner.');return}
+  if(!draft.requestDate&&!original){error('Select the request date.');return}
+  if(draft.due&&draft.requestDate&&draft.due<draft.requestDate){error('Due date cannot be before the request date.');return}
+  if(datesChanged()&&!reason.trim()){openSide(draft,true);return}
+  const values={...draft};delete values.id;
+  if(original){const changes=['title','owner','requestDate','due','status','comment'].filter(k=>(draft[k]||'')!==(original[k]||'')).map(k=>k+': '+(original[k]||'not set')+' → '+(draft[k]||'not set'));Object.assign(original,values);if(changes.length)original.history.push({at:stamp(),text:changes.join('; ')+(reason?'. '+reason:'')})}
+  else{values.id='pbc-'+Date.now()+'-'+Math.random().toString(36).slice(2,7);values.history=[{at:stamp(),text:'PBC request created'}];items.push(values)}
+  const added=original?null:items.at(-1),savedId=original?.id||added.id;draft=null;original=null;onChange(added);mount.querySelector('[data-pbc-row="'+savedId+'"]')?.focus();toast('PBC request saved.');
+ }
+ function openSide(a,reasonMode=false){
+  commentTarget=a;const side=mount.querySelector('[data-pbc-side]');side.hidden=false;mount.querySelector('.pbc-layout').classList.add('pbc-side-open');
+  side.innerHTML='<div class="pbc-side-heading"><h3>'+(reasonMode?'Confirm date changes':'Comment')+'</h3><button type="button" data-pbc-side-close aria-label="Close comment editor">×</button></div><p class="pbc-side-context">'+esc((a.pbcId?a.pbcId+' · ':'')+(a.title||'New request'))+'</p>'+(reasonMode?'<p class="pbc-help">Request date: '+dateLabel(original.requestDate)+' → '+dateLabel(draft.requestDate)+'<br>Due date: '+dateLabel(original.due)+' → '+dateLabel(draft.due)+'</p><label>Reason for date changes *<textarea data-pbc-reason rows="4"></textarea></label><button type="button" data-pbc-confirm-dates>Save row</button>':'<label>Comment<textarea data-pbc-comment-text rows="8" placeholder="Notes, client responses or follow-up context">'+esc(a.comment||'')+'</textarea></label><button type="button" data-pbc-comment-save>Save comment</button>')+(!reasonMode&&a.id!=='pbc-draft'?'<button type="button" data-pbc-schedule '+(a.status==='Done'?'disabled':'')+'>Add to my day</button>':'')+'<p class="field-error" data-pbc-side-error role="alert"></p><details class="pbc-side-history"><summary>History</summary>'+(a.history||[]).map(h=>'<p><strong>'+esc(h.at)+'</strong><br>'+esc(h.text)+'</p>').join('')+((a.history||[]).length?'':'<p>No changes recorded.</p>')+'</details>';
+  side.querySelector('textarea').focus();
+ }
+ function closeSide(){mount.querySelector('[data-pbc-side]').hidden=true;mount.querySelector('.pbc-layout').classList.remove('pbc-side-open');mount.querySelector('[data-pbc-comment="'+commentTarget.id+'"]')?.focus()}
+ mount.oninput=e=>{const f=e.target.closest('[data-pbc-field]');if(f&&draft)draft[f.dataset.pbcField]=f.value};
+
+ async function upload(file){
+  if(!file)return;
+  if(draft){error('Save or cancel the row before importing.');return}
+  const panel=mount.querySelector('[data-pbc-import]');panel.hidden=false;busy=true;panel.textContent='Reading workbook…';
+  try{
+   if(!/\.xlsx$/i.test(file.name)||file.size>5*1024*1024)throw Error('Choose an .xlsx workbook smaller than 5 MB.');
+   importRows=await window.PBCExchange.read(await file.arrayBuffer());importFile=file.name;
+   if(!importRows.length)throw Error('No requests found. Fill in the template, then upload it again.');
+   const entries=window.PBCExchange.plan(importRows,items),invalid=entries.some(r=>r.errors.length),dateChanges=entries.filter(r=>r.dateChanged);
+   panel.innerHTML='<h3>Review Excel import</h3><p>'+esc(file.name)+' · '+entries.filter(r=>r.action==='Add').length+' new · '+entries.filter(r=>r.action==='Update').length+' updates · '+entries.filter(r=>r.action==='Unchanged').length+' unchanged</p><div class="pbc-import-rows">'+entries.map(r=>'<div><strong>Row '+r.row+' · '+esc(r.item.pbcId||'New ID on import')+' · '+r.action+'</strong><span>'+esc(r.item.title||'Missing request')+'</span><div class="pbc-import-values">'+[['Owner',r.item.owner],['Request date',r.item.requestDate],['Due date',r.item.due],['Status',r.item.status],['Comment',r.item.comment]].map(([label,value])=>'<span><strong>'+label+':</strong> '+esc(value||'Not set')+'</span>').join('')+'</div><p>'+esc(r.errors.join(' ')||(r.changes.length?r.changes.map(k=>k+': '+(r.existing[k]||'not set')+' → '+(r.item[k]||'cleared')).join('; '):'Ready'))+'</p></div>').join('')+'</div>'+(dateChanges.length?'<label>Reason for changed dates *<textarea data-pbc-import-reason rows="2" aria-label="Reason for imported date changes"></textarea></label>':'')+'<p data-pbc-import-error role="alert"></p><button type="button" data-pbc-import-commit '+(invalid?'disabled':'')+'>Import requests</button> <button type="button" data-pbc-import-cancel>Cancel</button>';
+  }catch(e){importRows=null;panel.textContent=e.message}finally{busy=false}
+ }
+ mount.onchange=e=>{if(e.target.matches('[data-pbc-file]')){upload(e.target.files[0]);e.target.value=''}else mount.oninput(e)};
+ mount.onclick=async e=>{
+  const target=e.target,button=selector=>target.closest(selector);
+  if(button('[data-pbc-import-cancel]')){importRows=null;mount.querySelector('[data-pbc-import]').hidden=true;mount.querySelector('[data-pbc-upload]').focus();return}
+  if(button('[data-pbc-import-commit]')){const panel=mount.querySelector('[data-pbc-import]');try{const entries=window.PBCExchange.plan(importRows,owner.actionItems.filter(a=>a.kind==='PBC'));const count=window.PBCExchange.apply(entries,owner,panel.querySelector('[data-pbc-import-reason]')?.value||'',importFile);importRows=null;onChange();toast(count+' PBC requests imported.');mount.querySelector('[data-pbc-upload]').focus()}catch(e){panel.querySelector('[data-pbc-import-error]').textContent=e.message}return}
+  if(button('[data-pbc-upload]')){if(draft||busy){error('Finish the current edit first.');return}mount.querySelector('[data-pbc-file]').click();return}
+  if(button('[data-pbc-download]')){if(draft||busy){error('Finish the current edit first.');return}const b=button('[data-pbc-download]');b.disabled=true;try{const blob=await window.PBCExchange.download(owner.actionItems.filter(a=>a.kind==='PBC')),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=owner.reference+'-PBC-template.xlsx';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Excel template downloaded with existing PBC IDs.')}catch(e){error('Could not create template: '+e.message)}finally{b.disabled=false}return}
+  if(button('[data-pbc-import]'))return;
+  if((busy||importRows)&&!button('[data-pbc-import]')){error('Finish or cancel the Excel import first.');return}
+  if(button('[data-pbc-schedule]')){if(draft){error('Save the row before adding it to My day.');return}onSchedule(commentTarget);return}
+  if(button('[data-pbc-add]')){begin();return}
+  if(button('[data-pbc-save]')){commit();return}
+  if(button('[data-pbc-cancel]')){draft=null;original=null;render();mount.querySelector('[data-pbc-add]').focus();return}
+  if(button('[data-pbc-side-close]')){closeSide();return}
+  if(button('[data-pbc-confirm-dates]')){const reason=mount.querySelector('[data-pbc-reason]').value.trim();if(!reason){mount.querySelector('[data-pbc-side-error]').textContent='Enter a reason.';return}commit(reason);return}
+  if(button('[data-pbc-comment-save]')){const text=mount.querySelector('[data-pbc-comment-text]').value;if(draft&&draft.id===commentTarget.id){draft.comment=text;closeSide();const b=mount.querySelector('[data-pbc-comment="'+draft.id+'"]');b.textContent=text||'Add comment';b.title=text||'Add comment';b.focus();toast('Comment added to this row draft. Save the row to keep it.')}else{const previous=commentTarget.comment||'',savedId=commentTarget.id;commentTarget.comment=text;if(previous!==text)commentTarget.history.push({at:stamp(),text:'Comment: '+(previous||'not set')+' → '+(text||'cleared')});onChange();mount.querySelector('[data-pbc-comment="'+savedId+'"]')?.focus();toast('Comment saved.')}return}
+  const comment=button('[data-pbc-comment]');if(comment){if(draft&&draft.id!==comment.dataset.pbcComment){error('Save or cancel the current row first.');return}openSide(draft||items.find(a=>a.id===comment.dataset.pbcComment));return}
+  const sortButton=button('[data-pbc-sort]');if(sortButton){if(draft){error('Save or cancel the current row before sorting.');return}onSort(sortButton.dataset.pbcSort);return}
+  if(button('[data-pbc-side]')||button('input,select,textarea'))return;
+  const row=button('[data-pbc-row]');if(row&&!draft)begin(items.find(a=>a.id===row.dataset.pbcRow));
+ };
+ mount.onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('tr[data-pbc-row]')){e.preventDefault();begin(items.find(a=>a.id===e.target.dataset.pbcRow))}if(e.key==='Escape'&&!mount.querySelector('[data-pbc-side]').hidden){e.preventDefault();closeSide()}};
+ render();
+};
