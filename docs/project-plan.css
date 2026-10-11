@@ -91,3 +91,14 @@
 .pp-edit-name{grid-column:1;grid-row:1}.pp-edit-status{grid-column:2;grid-row:1}.pp-edit-dates{grid-column:1;grid-row:2}.pp-edit-estimate{grid-column:2;grid-row:2}.pp-edit-owners{grid-column:1/-1;grid-row:3}
 .pp-edit-secondary{max-width:800px;grid-template-columns:minmax(0,1fr)}
 @media(max-width:500px){.pp-edit-grid,.pp-edit-grid:has(#pp-estimate){grid-template-columns:minmax(0,1fr)}.pp-edit-name,.pp-edit-status,.pp-edit-dates,.pp-edit-estimate,.pp-edit-owners{grid-column:auto;grid-row:auto}.pp-edit-name{order:1}.pp-edit-status{order:2}.pp-edit-dates{order:3}.pp-edit-estimate{order:4}.pp-edit-owners{order:5}}
+
+/* A text equivalent remains available when the mobile chart is hidden. */
+@media(max-width:768px){
+ .pp-mobile-dates{display:flex;flex-wrap:wrap;gap:var(--pp-sm);padding:var(--pp-sm);font-size:var(--pp-caption);line-height:1.5;overflow-wrap:anywhere}
+ .pp-label{height:auto;min-height:var(--pp-row-height);grid-template-columns:minmax(0,1fr) auto;align-items:start;padding-block:var(--pp-sm)}
+ .pp-label>.pp-item-heading{grid-column:1;grid-row:1;min-width:0}
+ .pp-label>.pp-owner{grid-column:1;grid-row:2;white-space:normal;overflow-wrap:anywhere;padding-inline-start:var(--pp-lg)}
+ .pp-label>.pp-item-controls{grid-column:2;grid-row:1 / span 2;flex-wrap:wrap;justify-content:flex-end;max-width:var(--pp-action-width)}
+ .pp-milestone .pp-label{grid-template-columns:minmax(0,1fr)}
+ .pp-milestone .pp-item-heading{flex-wrap:wrap}.pp-milestone .pp-owner{display:none}
+}
