@@ -1,0 +1,83 @@
+name: daily-planner
+x-app: &app
+  build: .
+  image: daily-planner:local
+  restart: unless-stopped
+  env_file: .env
+  environment: &app-environment
+    DJANGO_DEBUG: "false"
+    DJANGO_BEHIND_PROXY: "true"
+    DJANGO_DATABASE_CACHE: "true"
+    DJANGO_ALLOWED_HOSTS: "${APP_DOMAIN:-localhost},localhost,127.0.0.1"
+    CSRF_TRUSTED_ORIGINS: "https://${APP_DOMAIN:-localhost}"
+    DATABASE_URL: "postgresql://planner:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/planner"
+    MEDIA_ROOT: /data/media
+    HUEY_IMMEDIATE: "false"
+  volumes:
+    - media:/data/media
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: planner
+      POSTGRES_USER: planner
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U planner -d planner"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  web:
+    <<: *app
+    command: ["web"]
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; r=urllib.request.Request('http://127.0.0.1:8000/health/',headers={'X-Forwarded-Proto':'https'}); urllib.request.urlopen(r,timeout=5)"]
+      start_period: 60s
+      interval: 15s
+      timeout: 10s
+      retries: 5
+  worker:
+    <<: *app
+    command: ["worker"]
+    depends_on:
+      web:
+        condition: service_healthy
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - proxy_data:/data
+      - proxy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+
+volumes:
+  database:
+  media:
+  proxy_data:
+  proxy_config:

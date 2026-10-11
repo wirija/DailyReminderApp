@@ -1,5 +1,18 @@
 /* Shared safeguards for the session-only prototype. No network or persistence. */
 (()=>{
+ // Validate bounded fields before any form handler can mutate the shared workspace.
+ window.PlannerValidation={
+  form(form,error){
+   for(const field of form.querySelectorAll('input,textarea')){
+    const limit=Number(field.getAttribute('maxlength')),value=field.value.trim();
+    const message=limit>0&&[...value].length>limit?'Use at most '+limit+' characters.':field.type==='email'&&value&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)?'Enter a valid email address.':'';
+    if(message){if(error)error.textContent=message;field.setCustomValidity?.(message);field.reportValidity?.();field.focus();return false}
+   }
+   return true;
+  }
+ };
+ document.addEventListener?.('input',event=>event.target.setCustomValidity?.(''),true);
+ document.addEventListener?.('submit',event=>{if(!window.PlannerValidation.form(event.target,event.target.querySelector('.field-error,[role="alert"]'))){event.preventDefault();event.stopImmediatePropagation()}},true);
  const checks=new Map();let undo=null;
  window.DraftGuard={
   register(key,isDirty){checks.set(key,isDirty)},

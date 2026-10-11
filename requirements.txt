@@ -1,0 +1,12 @@
+Django>=5.2.8,<5.3
+djangorestframework>=3.16,<3.17
+django-allauth[socialaccount]>=65.12,<66
+psycopg[binary]>=3.2,<4
+dj-database-url>=2.3,<4
+gunicorn>=23,<24
+whitenoise>=6.9,<7
+huey>=3.4,<4
+httpx>=0.28,<0.29
+python-docx>=1.2,<2
+openpyxl>=3.1,<4
+cryptography>=45,<47

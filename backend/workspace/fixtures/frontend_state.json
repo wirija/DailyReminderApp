@@ -1,0 +1,278 @@
+{
+  "clients": [
+    {
+      "id": 1791770400000,
+      "name": "Live client",
+      "contact": "Alex",
+      "email": "alex@example.com",
+      "projects": [
+        "New engagement"
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "name": "New engagement",
+      "reference": "PRJ-001",
+      "description": "No description added yet.",
+      "healthKey": "healthy",
+      "health": "On track",
+      "rank": 2,
+      "start": "12 Oct 2026",
+      "end": "12 Nov 2026",
+      "milestone": "Acceptance",
+      "milestoneDate": "2026-11-10",
+      "milestoneLabel": "10 Nov 2026",
+      "sg": [
+        0,
+        0
+      ],
+      "hn": [
+        0,
+        0
+      ],
+      "sgWork": "No open work recorded",
+      "hnWork": "No open work recorded",
+      "updated": "Not yet",
+      "issues": [
+        "No open blockers or client requests recorded"
+      ],
+      "flags": [],
+      "tasks": [],
+      "history": [],
+      "minutes": [],
+      "hasFollowups": false,
+      "action": "No PBC requests yet",
+      "actionStatus": "Not started",
+      "actionDescription": "Add client requests as the project progresses.",
+      "confirmation": "No scope confirmations pending",
+      "confirmationDescription": "Meeting decisions will appear here.",
+      "documents": "No documents uploaded yet.",
+      "sourceOpportunityId": 1,
+      "meetingRecords": [
+        {
+          "id": "meeting-1791770400000-2",
+          "title": "Discovery minutes",
+          "date": "2026-10-12",
+          "time": "",
+          "attendees": "",
+          "agenda": "",
+          "notes": "Keep prior commitments and evidence.",
+          "status": "Draft",
+          "decisions": [],
+          "files": [],
+          "versions": [],
+          "draft": "",
+          "updated": "12/10/2026, 10:00:00 SGT",
+          "attendeesOriginal": "",
+          "attendeeRecords": []
+        }
+      ],
+      "actionItems": [
+        {
+          "id": "action-1791770400000-1",
+          "title": "Schedule discovery",
+          "owner": "Test User",
+          "due": "2026-10-13",
+          "time": "",
+          "status": "Open",
+          "kind": "Action",
+          "meetingId": "",
+          "history": []
+        }
+      ],
+      "pbcSequence": 0,
+      "plan": [
+        {
+          "name": "Delivery phase",
+          "start": "2026-10-12",
+          "end": "2026-11-12",
+          "owners": [],
+          "owner": "",
+          "team": "",
+          "status": "Not started",
+          "estimate": "",
+          "description": "",
+          "id": "work-1791770400000-1",
+          "kind": "phase",
+          "history": [],
+          "children": []
+        }
+      ],
+      "agreedSections": [
+        {
+          "id": "agreed-default-PRJ-001-0",
+          "name": "Scope & deliverables",
+          "parentId": ""
+        },
+        {
+          "id": "agreed-default-PRJ-001-1",
+          "name": "Functionality",
+          "parentId": ""
+        },
+        {
+          "id": "agreed-default-PRJ-001-2",
+          "name": "Screens & user experience",
+          "parentId": ""
+        },
+        {
+          "id": "agreed-default-PRJ-001-3",
+          "name": "Data & integrations",
+          "parentId": ""
+        },
+        {
+          "id": "agreed-default-PRJ-001-4",
+          "name": "Access & permissions",
+          "parentId": ""
+        },
+        {
+          "id": "agreed-default-PRJ-001-5",
+          "name": "Testing & acceptance",
+          "parentId": ""
+        },
+        {
+          "id": "agreed-default-PRJ-001-6",
+          "name": "Deployment & handover",
+          "parentId": ""
+        },
+        {
+          "id": "agreed-default-PRJ-001-7",
+          "name": "Responsibilities & dependencies",
+          "parentId": ""
+        }
+      ],
+      "agreedItems": [],
+      "issueRecords": [],
+      "agreedDefaultsInitialized": true,
+      "repositoryFiles": [],
+      "repositorySections": [
+        {
+          "id": "document-section-PRJ-001-0",
+          "name": "Engagement & scope"
+        },
+        {
+          "id": "document-section-PRJ-001-1",
+          "name": "Requirements & FSD"
+        },
+        {
+          "id": "document-section-PRJ-001-2",
+          "name": "Design & technical"
+        },
+        {
+          "id": "document-section-PRJ-001-3",
+          "name": "Client-provided documents"
+        },
+        {
+          "id": "document-section-PRJ-001-4",
+          "name": "Meeting records"
+        },
+        {
+          "id": "document-section-PRJ-001-5",
+          "name": "Testing & acceptance"
+        },
+        {
+          "id": "document-section-PRJ-001-6",
+          "name": "Deployment & handover"
+        },
+        {
+          "id": "document-section-PRJ-001-7",
+          "name": "Other documents"
+        }
+      ]
+    }
+  ],
+  "opportunities": [
+    {
+      "id": 1,
+      "reference": "OPP-001",
+      "name": "New engagement",
+      "clientId": 1791770400000,
+      "stage": "Won",
+      "nextAction": "Schedule discovery",
+      "nextDate": "2026-10-13",
+      "nextTime": "",
+      "summary": "No description added yet.",
+      "proposal": "No proposal recorded yet.",
+      "followup": "Schedule discovery",
+      "meetings": [],
+      "meetingRecords": [
+        {
+          "id": "meeting-1791770400000-2",
+          "title": "Discovery minutes",
+          "date": "2026-10-12",
+          "time": "",
+          "attendees": "",
+          "agenda": "",
+          "notes": "Keep prior commitments and evidence.",
+          "status": "Draft",
+          "decisions": [],
+          "files": [],
+          "versions": [],
+          "draft": "",
+          "updated": "12/10/2026, 10:00:00 SGT",
+          "attendeesOriginal": "",
+          "attendeeRecords": []
+        }
+      ],
+      "actionItems": [
+        {
+          "id": "action-1791770400000-1",
+          "title": "Schedule discovery",
+          "owner": "Test User",
+          "due": "2026-10-13",
+          "time": "",
+          "status": "Open",
+          "kind": "Action",
+          "meetingId": "",
+          "history": []
+        }
+      ],
+      "pbcSequence": 0,
+      "stageHistory": [
+        {
+          "date": "12/10/2026, 10:00:00 SGT",
+          "from": "Contact",
+          "to": "Won",
+          "action": "Schedule discovery",
+          "due": "13 Oct 2026",
+          "note": "Project PRJ-001 created."
+        }
+      ],
+      "projectName": "New engagement"
+    }
+  ],
+  "planner": {
+    "day": "2026-10-12",
+    "serial": 102,
+    "sessions": [
+      {
+        "id": "session-102",
+        "itemId": "task-101",
+        "kind": "task",
+        "name": "Persisted task",
+        "project": "General",
+        "start": 1791770400000,
+        "end": 1791770400000
+      }
+    ],
+    "currentTaskId": "task-101",
+    "tasks": [
+      {
+        "id": "task-101",
+        "name": "Persisted task",
+        "project": "General",
+        "estimateMinutes": 30,
+        "duration": "30m",
+        "due": "",
+        "priority": "Normal",
+        "slot": null,
+        "pinned": false,
+        "status": "Paused",
+        "createdAt": 1791770400000
+      }
+    ],
+    "meetings": []
+  },
+  "teamMembers": [],
+  "revision": 8
+}

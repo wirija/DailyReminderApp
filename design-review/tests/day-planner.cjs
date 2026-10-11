@@ -78,7 +78,7 @@ test('overflow stays unscheduled; overtime requires explicit choice; weekends ha
   const model = fresh(), a = add(model, 'Full day', 600), b = add(model, 'Another', 120);
   const normal = core.replan(model, { now: monday }); assert.equal(a.slot, null); assert(normal.overflow.includes(a)); assert(b.slot >= 3);
   const overtime = core.replan(model, { allowOvertime: true, now: monday }); assert.equal(overtime.overflow.length, 0); assert.equal(a.slot, 0); assert.equal(b.slot, 40);
-  model.day = '2026-10-11'; assert.equal(core.replan(model, { now: monday }).overflow.length, 2); assert.equal(a.slot, null); assert.equal(b.slot, null);
+  model.day = '2026-10-11'; model.tasks.forEach(t=>t.date=model.day); assert.equal(core.replan(model, { now: monday }).overflow.length, 2); assert.equal(a.slot, null); assert.equal(b.slot, null);
 });
 test('timer pause/resume accumulates only its task and conflict never silently switches tasks', () => {
   const model = fresh(), a = add(model, 'A'), b = add(model, 'B');
@@ -124,6 +124,29 @@ test('reports merge nested/adjacent overlaps without double count and empty stat
   const report = core.computeReport([], 'This month', monday); assert.equal(report.total, 0); assert.equal(report.normal, 0); assert.equal(report.overtime, 0); assert.deepEqual(report.activities, []);
 });
 test('timer formatting does not wrap after 24 hours', () => { assert.equal(core.clockText(25 * 3600000 + 2000), '25:00:02'); assert.equal(core.slotLabel(48), '20:00'); });
+
+test('scheduled meetings count elapsed time automatically without creating sessions', () => {
+  const model=fresh();model.meetings.push({id:'m',name:'Scheduled call',kind:'client',project:'Client portal',date:model.day,slot:4,estimateMinutes:60});
+  const report=core.computeReport(core.reportEntries(model),'Today',ms('2026-10-12T09:30:00+08:00'));
+  assert.equal(report.total,30*60000);assert.equal(report.activities[0].source,'Scheduled estimate');assert.equal(model.sessions.length,0);
+  assert.equal(core.computeReport(core.reportEntries(model),'Today',monday).total,0);
+});
+test('manual meeting corrections override timers; timers override estimate; overlaps count once', () => {
+  const model=fresh();model.meetings.push({id:'m',name:'Call',kind:'client',date:model.day,slot:4,estimateMinutes:60});
+  model.sessions.push(session('m','2026-10-12T09:10:00+08:00','2026-10-12T09:20:00+08:00',{kind:'meeting'}));
+  let report=core.computeReport(core.reportEntries(model),'Today',ms('2026-10-12T12:00:00+08:00'));assert.equal(report.total,10*60000);assert.equal(report.activities[0].source,'Actual timer');
+  Object.assign(model.meetings[0],{actualStart:'2026-10-12T09:15:00+08:00',actualEnd:'2026-10-12T09:30:00+08:00'});
+  model.sessions.push(session('task','2026-10-12T09:20:00+08:00','2026-10-12T09:40:00+08:00'));
+  report=core.computeReport(core.reportEntries(model),'Today',ms('2026-10-12T12:00:00+08:00'));assert.equal(report.total,25*60000);assert.equal(report.activities.find(a=>a.itemId==='m').source,'Actual correction');assert.equal(model.sessions.length,2);
+  model.meetings[0].actualEnd=model.meetings[0].actualStart;assert.equal(core.computeReport(core.reportEntries(model),'Today',ms('2026-10-12T12:00:00+08:00')).total,20*60000);
+});
+test('minutes scheduling upserts linked calendar record and preserves exact non-quarter time', () => {
+  const model=fresh(),record={id:'minutes-1',title:'Discussion',date:model.day,time:'09:07',durationMinutes:20};
+  core.upsertMeeting(model,record,'Client portal');assert.equal(model.meetings.length,1);assert.equal(model.meetings[0].slot,4);assert.equal(Date.parse(model.meetings[0].scheduledStart),ms('2026-10-12T09:07:00+08:00'));
+  assert.equal(core.computeReport(core.reportEntries(model),'Today',ms('2026-10-12T10:00:00+08:00')).total,20*60000);
+  record.time='11:00';record.title='Renamed';core.upsertMeeting(model,record,'Client portal');assert.equal(model.meetings.length,1);assert.equal(model.meetings[0].name,'Renamed');assert.equal(model.meetings[0].slot,12);
+  record.time='';core.upsertMeeting(model,record,'Client portal');assert.equal(model.meetings.length,0);
+});
 
 // Small inert DOM to exercise generated forms/handlers. It performs no rendering,
 // loads no URLs, and cannot establish pixel, browser, accessibility or layout fidelity.

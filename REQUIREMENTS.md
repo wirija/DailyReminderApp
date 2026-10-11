@@ -1,6 +1,6 @@
 # Daily Project Planner — requirements audit
 
-**Stage:** Step 1 only; awaiting user approval. Updated with the latest lifecycle, table, hierarchy and Admin annotations. No mockup code changed.
+**Current stage:** The Django application build is underway and the existing PWA now has a persistent server mode. See `README.md`, `DEPLOYMENT.md` and `BUILD-STATUS.md` for current implementation and verification. The table below is the **historical Step 1 baseline**, followed by incremental changes; its original statuses are not a certification of the new application.
 
 **Audit basis:** Full conversation, including browser annotations and the latest six-step instruction; all markup, CSS and JavaScript in `docs/mockup.html` and `docs/requirements.html`. These are the only current mockup/document files. `download_hls.py` is unrelated and is not part of the mockup.
 
@@ -18,7 +18,7 @@ Quotes below are verbatim excerpts from user messages, each fewer than 15 words.
 | R002 | Personal workspace for a manager coordinating several projects and communicating with clients; support a quick next-action decision. | “i am just assigned to multiple projects at the same time” | Partly met — screens exist; many workflows remain static. |
 | R003 | Reduce decision paralysis through a visible suggested day and understandable progress. **Implicit:** clear language, low interruption, easy scanning. | “sometime i get decision paralysis” | Partly met — timeline exists but does not reflect real time or task duration. |
 | R004 | Daily planner and project meetings/follow-ups must ship together, connected from the start. | “I need them together from the start” | Partly met — sections coexist but most project actions cannot feed the planner. |
-| R005 | Primary use on a work computer; support installable PWA use. | “work computer. Can this be a progressive web app?” | Partly met — browser HTML only; no manifest/service worker/install flow. |
+| R005 | Primary use on a work computer; support installable PWA use. | “work computer. Can this be a progressive web app?” | Met in source/behavior checks — manifest, icons, optional install prompt, offline shell and localhost/HTTPS launcher. Actual browser installation remains unverified; records remain session-only. See `PWA.md`. |
 | R006 | Self-hostable on a MacBook or company server; Dell DG10 is a possibility, not a decided target. | “I might host it on the company's dell DG10” | Partly met — static file portable; no app server/deployment configuration. |
 | R007 | One user only; team members do not need accounts or direct data entry. | “No. Only me” | Met — single-user preview. |
 | R008 | No Outlook/calendar integration; enter meetings manually. | “this app will not be conencted to my otulook or cal” | Partly met — no integration; new-meeting form cannot save. |
