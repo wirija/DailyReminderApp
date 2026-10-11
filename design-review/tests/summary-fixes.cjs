@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict');
+const {projectSummary}=require('../../docs/project-summary.js');
+const p={health:'At risk',plan:[{name:'Delivery',status:'In progress',end:'2026-11-01',children:[{name:'Integration',team:'Hanoi',status:'Blocked',end:'2026-10-01',children:[{name:'Token test',team:'Hanoi',status:'In progress',end:'2026-10-20',children:[]}]},{name:'Role review',team:'Singapore',status:'Done',end:'2026-10-01',children:[]}]}],actionItems:[{title:'Sample files',kind:'PBC',status:'Waiting',due:'2026-10-02'}],issueRecords:[{status:'Open',due:'2026-10-02'}],meetingRecords:[{decisions:[{status:'Needs clarification'},{status:'Agreed in discussion'}]}]};
+let result=projectSummary(p,'2026-10-11');
+assert.deepEqual(result.hn.counts,[0,1]);assert.deepEqual(result.sg.counts,[1,1]);
+assert(result.flags.includes('1 overdue work item'));assert(result.issues.includes('1 blocked work item'));assert(result.issues.includes('1 open PBC request'));assert(result.issues.includes('1 meeting decision needing clarification'));
+p.plan[0].children[0].status='Done';p.plan[0].children[0].children[0].status='Done';p.actionItems[0].status='Done';p.issueRecords[0].status='Resolved';p.meetingRecords[0].decisions[0].status='Agreed in discussion';
+result=projectSummary(p,'2026-10-11');assert.deepEqual(result.hn.counts,[1,1]);assert.deepEqual(result.flags,[]);assert.deepEqual(result.issues,['No open blockers or client requests recorded']);assert.equal(p.health,'At risk','Manual health must not be changed by derived signals');
+assert.deepEqual(projectSummary({tasks:[],end:'31 Oct 2026'},'2026-10-11').sg.counts,[0,0]);
+console.log('PASS saved project summaries: leaf workload, parent warnings, completed/resolved exclusions, live action/issue/decision changes and manual health retained.');

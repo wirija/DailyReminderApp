@@ -1,0 +1,46 @@
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const repo=path.resolve(__dirname,'../..');
+// Reuse only the inert element parser, never the builder's assertions.
+const original=fs.readFileSync(path.join(__dirname,'project-fixes.cjs'),'utf8');
+const harnessModule={exports:{}};new Function('require','module','__dirname',original.split('// Small inert DOM:')[0]+'\nmodule.exports={E};')(require,harnessModule,__dirname);
+const {E}=harnessModule.exports,root=new E('main');
+Object.defineProperty(E.prototype,'isConnected',{get(){for(let n=this;n;n=n.parentNode)if(n===root)return true;return false}});
+const oldMatches=E.prototype.matches;E.prototype.matches=function(s){if(s==='[hidden]')return this.hidden;return oldMatches.call(this,s)};
+E.prototype.append=function(...nodes){for(const n of nodes){n.remove();this.childNodes.push(n);n.parentNode=this}};
+E.prototype.replaceChildren=function(...nodes){for(const n of this.childNodes)n.parentNode=null;this.childNodes=[];this.append(...nodes)};
+const $=id=>root.querySelector('[id="'+id+'"]');
+const add=id=>{const n=new E('div',{id});root.append(n);return n};
+const esc=s=>String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
+const notices=[],undos=[];
+global.document={getElementById:$,querySelector:s=>s==='main'?root:root.querySelector(s),createElement:t=>new E(t)};
+global.window={};
+global.FormData=class{constructor(f){this.form=f}entries(){return this.form.querySelectorAll('input,select,textarea').filter(n=>n.attrs.name).map(n=>[n.attrs.name,n.value])}};
+const load=f=>new Function(fs.readFileSync(path.join(repo,'docs',f),'utf8'))();
+load('review-ui.js');window.ReviewUndo={offer:(label,restore)=>undos.push({label,restore})};
+window.renderIssueExchange=()=>({isActive:()=>false});
+const click=async(mount,selector)=>{const target=mount.querySelector(selector);assert(target,'Missing '+selector);for(let n=target;n;n=n.parentNode)await n.onclick?.({target,preventDefault(){},stopPropagation(){}});return target};
+const event=()=>({preventDefault(){},stopPropagation(){}});
+const results=[];async function test(name,fn){try{await fn();results.push({name,pass:true});console.log('PASS',name)}catch(e){results.push({name,pass:false,error:e.message});console.log('FAIL',name,':',e.message)}}
+(async()=>{
+ add('toast');const docs=add('project-documents');load('project-documents.js');
+ const file=(id,name,sectionId)=>({id,name,sectionId,type:'TXT',size:12,lastModified:1,addedAt:1,file:{name}});
+ const a={reference:'A',repositorySections:[{id:'a1',name:'Scope'},{id:'a2',name:'Design'}],repositoryFiles:[file('af','A document','a1')]};
+ const b={reference:'B',repositorySections:[{id:'b1',name:'Scope'}],repositoryFiles:[file('bf','B document','b1')]};
+ await test('Document move preserves original file and metadata',async()=>{window.renderProjectDocuments(a,{esc,toast:t=>notices.push(t)});await click(docs,'[data-doc-move="af"]');const f=docs.querySelector('form');f.querySelector('select').value='a2';f.onsubmit(event());assert.equal(a.repositoryFiles[0].sectionId,'a2');assert.equal(a.repositoryFiles[0].addedAt,1);assert.equal(a.repositoryFiles[0].file.name,'A document')});
+ await test('Document Undo cannot replace another project view',async()=>{await click(docs,'[data-doc-remove="af"]');assert.equal(a.repositoryFiles.length,0);window.renderProjectDocuments(b,{esc,toast:t=>notices.push(t)});undos.at(-1).restore();assert.equal(a.repositoryFiles.length,1);assert(docs.innerHTML.includes('B document'),'Undo replaced active project B markup');assert(!docs.innerHTML.includes('A document'),'Old project A leaked into B document view')});
+ const am=add('project-agreed-items');add('project-issues');load('project-registers.js');
+ const p={reference:'P',agreedDefaultsInitialized:true,agreedSections:[{id:'s',name:'Scope',parentId:''},{id:'sub',name:'Screen',parentId:'s'}],agreedItems:[{id:'agreement',sectionId:'s',subsectionId:'sub',name:'Roles',date:'2026-10-01',agreedWith:'Alex',description:'Old agreement',revisions:[]}],issueRecords:[]};
+ await test('Opening subsection agreement is pristine',async()=>{window.renderProjectRegisters(p,{esc,toast:t=>notices.push(t)});await click(am,'[data-pr-agreement="agreement"]');assert.equal(window.DraftGuard.isDirty(),false,'Untouched populated subsection registers dirty')});
+ await test('Agreement edit preserves prior revision and requires reason',async()=>{const f=am.querySelector('form');f.querySelector('[name="description"]').value='Revised agreement';f.onsubmit(event());assert.equal(p.agreedItems[0].description,'Old agreement');f.querySelector('[name="revisionReason"]').value='Client clarified roles';f.onsubmit(event());assert.equal(p.agreedItems[0].description,'Revised agreement');assert.equal(p.agreedItems[0].revisions[0].before.description,'Old agreement');assert.equal(p.agreedItems[0].revisions[0].reason,'Client clarified roles')});
+ const pb=add('pbc-test');load('pbc-table.js');
+ const owner={reference:'PBC-P',actionItems:[{id:'p1',pbcId:'PBC-001',kind:'PBC',title:'Request data',owner:'Peter',requestDate:'2026-10-01',due:'2026-10-20',status:'Open',comment:'Saved note',history:[]}]};
+ const opts={owner,items:owner.actionItems,esc,sort:{key:'title',direction:1},onSort(){window.renderPbcTable(pb,opts)},onChange(){window.renderPbcTable(pb,opts)},onSchedule(){},toast:t=>notices.push(t)};
+ await test('PBC comment draft survives search change',async()=>{window.renderPbcTable(pb,opts);await click(pb,'[data-pbc-comment="p1"]');pb.querySelector('[data-pbc-comment-text]').value='Keep this draft';assert(window.DraftGuard.isDirty());const search=pb.querySelector('[data-pbc-search]');search.value='Request';pb.oninput({target:search});assert.equal(pb.querySelector('[data-pbc-comment-text]')?.value,'Keep this draft','Search discarded dirty side comment')});
+ await test('PBC comment draft survives sorting',async()=>{window.renderPbcTable(pb,opts);await click(pb,'[data-pbc-comment="p1"]');pb.querySelector('[data-pbc-comment-text]').value='Keep this second draft';await click(pb,'[data-pbc-sort="title"]');assert.equal(pb.querySelector('[data-pbc-comment-text]')?.value,'Keep this second draft','Sort discarded dirty side comment')});
+ const {projectSummary}=require(path.join(repo,'docs/project-summary.js'));
+ await test('Summary exposes blocked/overdue parent task with future children',()=>{const data={end:'31 Dec 2026',plan:[{status:'In progress',start:'2026-10-01',end:'2026-12-31',children:[{name:'Integration',status:'Blocked',end:'2026-10-01',team:'Singapore',children:[{name:'Child',status:'In progress',end:'2026-12-01',team:'Hanoi',children:[]}]}]}],actionItems:[],issueRecords:[],meetingRecords:[]};const summary=projectSummary(data,'2026-10-11');assert(summary.flags.some(f=>f.includes('overdue')),'Parent overdue state disappears');assert(summary.issues.some(f=>f.includes('blocked')),'Parent blocked state disappears')});
+ await test('Undo preserves a later dirty document section draft',async()=>{load('review-ui.js');window.renderProjectDocuments(b,{esc,toast:t=>notices.push(t)});await click(docs,'[data-doc-remove="bf"]');await click(docs,'[data-doc-new-section]');const input=docs.querySelector('[name="sectionName"]');input.value='Unsaved section';assert(window.DraftGuard.isDirty());await click($('review-undo'),'button');assert.equal(docs.querySelector('[name="sectionName"]')?.value,'Unsaved section','Undo discarded section draft');assert.equal(b.repositoryFiles.length,0,'Undo should wait for save/cancel');await click(docs,'[data-doc-section-cancel]');await click($('review-undo'),'button');assert.equal(b.repositoryFiles.length,1,'Pending Undo remains available after cancellation')});
+ await test('Back to opportunities respects an unsaved form guard',()=>{const source=fs.readFileSync(path.join(repo,'docs/mockup.html'),'utf8');const fn=source.slice(source.indexOf('function showOpportunityRegister(){'),source.indexOf('function opportunityIcon('));let touched=false;const nodes={};for(const id of ['opportunity-record','opportunity-register','opportunity-rows','opportunity-search'])nodes[id]={hidden:false,querySelectorAll:()=>[],focus(){touched=true}};const guarded=new Function('window','document','$','renderOpportunities','activeOpportunityId',fn+';return showOpportunityRegister;')({DraftGuard:{canLeave:()=>false}},{body:{classList:{remove(){touched=true}}}},id=>nodes[id],()=>{touched=true},1);guarded();assert.equal(touched,false,'Back navigation ran despite dirty edit');assert.equal(nodes['opportunity-record'].hidden,false)});
+ console.log(JSON.stringify({passed:results.filter(r=>r.pass).length,failed:results.filter(r=>!r.pass).length,results},null,2));
+ process.exitCode=results.some(r=>!r.pass)?1:0;
+})();
