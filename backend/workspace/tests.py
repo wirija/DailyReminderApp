@@ -362,3 +362,115 @@ class WorkspaceIntegrationTests(TestCase):
         data=self.read();data['planner']['day']='2026-11-02';self.save(data)
         result=self.read();retained=next(t for t in result['planner']['tasks'] if t['id']==task['id'])
         self.assertEqual(retained['date'],'2026-10-20');self.assertEqual(retained['slot'],8)
+
+    def test_legacy_slots_migrate_once_without_changing_saved_timestamps(self):
+        data=copy.deepcopy(self.fixture)
+        data['planner'].pop('slotOrigin',None)
+        data['planner']['tasks'][0].update(slot=0,date='2026-10-12',pinned=True)
+        data['planner']['meetings']=[{'id':'legacy-call','name':'Legacy call','kind':'client',
+            'project':'General','date':'2026-10-12','slot':24,'length':4,'estimateMinutes':60}]
+        self.save(data)
+        before={str(b.pk):(b.starts_at,b.ends_at) for b in m.ScheduleBlock.objects.all()}
+        meeting=m.Meeting.objects.get(title='Legacy call')
+        canonical=meeting.starts_at
+        data=self.read()
+        self.assertEqual(data['planner']['slotOrigin'],0)
+        self.assertEqual(data['planner']['tasks'][0]['slot'],32)
+        self.assertEqual(data['planner']['meetings'][0]['slot'],56)
+        self.assertEqual(data['planner']['meetings'][0]['scheduledStart'],'2026-10-12T06:00:00+00:00')
+        self.save(data)
+        after={str(b.pk):(b.starts_at,b.ends_at) for b in m.ScheduleBlock.objects.all()}
+        self.assertEqual(after,before)
+        meeting.refresh_from_db()
+        self.assertEqual(meeting.starts_at,canonical)
+        self.assertEqual(self.read()['planner']['tasks'][0]['slot'],32)
+        self.assertFalse(m.AuditEvent.objects.filter(action='rescheduled').exists())
+
+    def test_midnight_late_and_overlapping_meetings_roundtrip_with_project(self):
+        data=copy.deepcopy(self.fixture)
+        data['planner']['slotOrigin']=0
+        data['planner']['tasks'][0].update(slot=0,date='2026-10-12',pinned=True)
+        data['planner']['meetings']=[
+            {'id':'midnight-call','name':'Midnight handover','kind':'internal','project':'New engagement',
+             'date':'2026-10-12','slot':0,'length':4,'estimateMinutes':60},
+            {'id':'overlapping-call','name':'Overlapping call','kind':'client','project':'General',
+             'date':'2026-10-12','slot':0,'length':2,'estimateMinutes':30},
+            {'id':'late-call','name':'Late handover','kind':'client','project':'New engagement',
+             'date':'2026-10-13','slot':95,'length':1,'estimateMinutes':15},
+            {'id':'full-day','name':'Full day workshop','kind':'internal','project':'New engagement',
+             'date':'2026-10-14','slot':0,'length':96,'estimateMinutes':1440},
+        ]
+        self.save(data)
+        read=self.read()
+        meetings={r['name']:r for r in read['planner']['meetings']}
+        self.assertEqual(meetings['Midnight handover']['slot'],0)
+        self.assertEqual(meetings['Midnight handover']['date'],'2026-10-12')
+        self.assertEqual(meetings['Midnight handover']['project'],'New engagement')
+        self.assertEqual(meetings['Midnight handover']['scheduledStart'],'2026-10-11T16:00:00+00:00')
+        self.assertEqual(meetings['Overlapping call']['scheduledStart'],meetings['Midnight handover']['scheduledStart'])
+        self.assertEqual(meetings['Late handover']['slot'],95)
+        self.assertEqual(meetings['Late handover']['date'],'2026-10-13')
+        self.assertEqual(meetings['Full day workshop']['estimateMinutes'],1440)
+        self.assertEqual(read['planner']['tasks'][0]['slot'],0)
+        self.save(read)
+        reread={r['name']:r for r in self.read()['planner']['meetings']}
+        for name in meetings:
+            for field in ('slot','date','project','scheduledStart','estimateMinutes'):
+                self.assertEqual(reread[name][field],meetings[name][field])
+        self.assertEqual(m.ScheduleBlock.objects.count(),5)
+
+    def test_canonical_meeting_timestamp_wins_over_slot_coordinates(self):
+        data=copy.deepcopy(self.fixture)
+        data['planner']['slotOrigin']=0
+        data['planner']['meetings']=[{'id':'exact-call','name':'Exact timestamp','kind':'client',
+            'project':'General','date':'2026-10-12','slot':32,'length':2,'estimateMinutes':30,
+            'scheduledStart':'2026-10-11T16:10:00Z'}]
+        self.save(data)
+        read=self.read()
+        calendar=read['planner']['meetings'][0]
+        self.assertEqual(calendar['slot'],0)
+        self.assertEqual(calendar['date'],'2026-10-12')
+        self.assertEqual(calendar['scheduledStart'],'2026-10-11T16:10:00+00:00')
+        self.save(read)
+        self.assertEqual(self.read()['planner']['meetings'][0]['scheduledStart'],calendar['scheduledStart'])
+
+    def test_imported_week_and_month_tasks_keep_individual_dates_and_overlaps(self):
+        data=copy.deepcopy(self.fixture)
+        data['planner'].update(slotOrigin=0,day='2026-10-12',sessions=[])
+        scheduled=[('week-monday','2026-10-12',1),('week-friday','2026-10-16',95),
+                   ('month-later','2026-10-30',40),('month-overlap','2026-10-30',40)]
+        data['planner']['tasks']=[{'id':ident,'name':ident,'project':'New engagement','date':day,
+            'slot':slot,'estimateMinutes':15,'priority':'Normal','status':'Ready','pinned':True,
+            'notes':'Imported calendar task'} for ident,day,slot in scheduled]
+        self.save(data)
+        read=self.read()
+        read['planner']['day']='2026-11-02'
+        self.save(read)
+        tasks={t['id']:t for t in self.read()['planner']['tasks']}
+        for ident,day,slot in scheduled:
+            self.assertEqual((tasks[ident]['date'],tasks[ident]['slot']),(day,slot))
+            self.assertEqual(tasks[ident]['project'],'New engagement')
+            self.assertEqual(tasks[ident]['notes'],'Imported calendar task')
+        self.assertEqual(m.ScheduleBlock.objects.count(),4)
+
+    def test_unscheduling_retains_task_history_and_recorded_time(self):
+        data=copy.deepcopy(self.fixture)
+        data['planner']['slotOrigin']=0
+        data['planner']['tasks'][0].update(slot=95,date='2026-10-12',estimateMinutes=15,pinned=True,
+            history=[{'text':'Imported from the weekly plan'}])
+        self.save(data)
+        activity=m.Activity.objects.get(client_key='task-101')
+        session_ids=list(activity.time_sessions.values_list('pk',flat=True))
+        old_audit_ids=list(m.AuditEvent.objects.values_list('pk',flat=True))
+        read=self.read()
+        read['planner']['tasks'][0].update(slot=None,pinned=False)
+        self.save(read)
+        self.assertTrue(m.Activity.objects.filter(pk=activity.pk).exists())
+        self.assertFalse(activity.blocks.exists())
+        self.assertEqual(list(activity.time_sessions.values_list('pk',flat=True)),session_ids)
+        self.assertEqual(m.AuditEvent.objects.filter(pk__in=old_audit_ids).count(),len(old_audit_ids))
+        task=self.read()['planner']['tasks'][0]
+        self.assertIsNone(task['slot'])
+        self.assertFalse(task['pinned'])
+        self.assertEqual(task['history'],[{'text':'Imported from the weekly plan'}])
+        self.assertEqual(task['date'],'2026-10-12')

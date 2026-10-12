@@ -15,7 +15,7 @@ test('task fields validate and preserve priority, deadline, project and estimate
   const model = fresh(), task = add(model, ' Send questions ', 20, { priority: 'High', due: '2026-10-15', project: 'Client portal' });
   assert.equal(task.name, 'Send questions'); assert.equal(task.estimateMinutes, 20); assert.equal(task.duration, '20m'); assert.equal(core.slotsFor(task), 2);
   assert.equal(task.priority, 'High'); assert.equal(task.due, '2026-10-15'); assert.equal(task.project, 'Client portal');
-  for (const value of [0, -1, 1.5, NaN, Infinity, 721, '']) assert.equal(core.addTask(model, { name: 'Bad', estimateMinutes: value }, monday).ok, false);
+  for (const value of [0, -1, 1.5, NaN, Infinity, 1441, '']) assert.equal(core.addTask(model, { name: 'Bad', estimateMinutes: value }, monday).ok, false);
   assert.equal(core.addTask(model, { name: ' ', estimateMinutes: 30 }, monday).ok, false);
   assert.equal(core.addTask(model, { name: 'Bad date', estimateMinutes: 30, due: '2026-02-30' }, monday).ok, false);
   assert.equal(core.addTask(model, { name: 'Bad priority', estimateMinutes: 30, priority: 'Urgently' }, monday).ok, false);
@@ -28,7 +28,7 @@ test('moving checks the full task and meeting duration, including final partial 
   assert.equal(core.moveItem(model, t.id, 3).ok, true);
   assert.equal(core.moveItem(model, 'm', 5).ok, false, 'meeting tail must not overlap task');
   assert.equal(core.moveItem(model, 'm', 8).ok, true);
-  assert.equal(core.moveItem(model, t.id, 46).ok, false); assert.equal(t.slot, 3);
+  assert.equal(core.moveItem(model, t.id, 94).ok, false); assert.equal(t.slot, 3);
 });
 test('scheduled tasks swap starts, preserve estimates and deadlines, and pin both', () => {
   const model = fresh(), a = add(model, 'Long', 45, { due: '2026-10-15' }), b = add(model, 'Short', 15);
@@ -53,31 +53,31 @@ test('empty placement and unscheduling are exact rather than first-free-slot mov
 });
 test('replan uses full intervals, priority/deadline order and preserves meetings/pinned/running', () => {
   const model = fresh(), later = add(model, 'Later', 30, { due: '2026-10-20' }), urgent = add(model, 'Urgent', 45, { priority: 'High' }), earlier = add(model, 'Earlier', 30, { due: '2026-10-14' }), pinned = add(model, 'Pinned', 30), running = add(model, 'Running', 15);
-  pinned.slot = 4; pinned.pinned = true; running.slot = 12; core.startItem(model, running.id, monday);
-  model.meetings.push({ id: 'm', kind: 'client', name: 'Call', date: model.day, slot: 8, estimateMinutes: 30 });
+  pinned.slot = 36; pinned.pinned = true; running.slot = 44; core.startItem(model, running.id, monday);
+  model.meetings.push({ id: 'm', kind: 'client', name: 'Call', date: model.day, slot: 40, estimateMinutes: 30 });
   core.replan(model, { now: monday });
-  assert.equal(pinned.slot, 4); assert.equal(running.slot, 12); assert.equal(model.meetings[0].slot, 8);
-  assert.equal(urgent.slot, 13, 'highest priority gets the first full 45-minute gap');
-  assert.equal(earlier.slot, 6, 'shorter tasks may fill earlier gaps that cannot hold urgent work'); assert.equal(later.slot, 10);
+  assert.equal(pinned.slot, 36); assert.equal(running.slot, 44); assert.equal(model.meetings[0].slot, 40);
+  assert.equal(urgent.slot, 45, 'highest priority gets the first full 45-minute gap');
+  assert.equal(earlier.slot, 38, 'shorter tasks may fill earlier gaps that cannot hold urgent work'); assert.equal(later.slot, 42);
   const all = core.allItems(model).filter(t => t.slot !== null);
   for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) assert.equal(core.overlaps(all[i].slot, all[i].slot + core.slotsFor(all[i]), all[j].slot, all[j].slot + core.slotsFor(all[j])), false);
 });
 test('equal-size tasks are allocated by marked priority then earliest deadline', () => {
   const model = fresh(), later = add(model, 'Later', 30, { due: '2026-10-20' }), earlier = add(model, 'Earlier', 30, { due: '2026-10-14' }), urgent = add(model, 'Urgent', 30, { priority: 'High' });
-  core.replan(model, { now: monday }); assert.equal(urgent.slot, 3); assert.equal(earlier.slot, 5); assert.equal(later.slot, 7);
+  core.replan(model, { now: monday }); assert.equal(urgent.slot, 35); assert.equal(earlier.slot, 37); assert.equal(later.slot, 39);
 });
 test('same-day replanning starts at the next quarter-hour and never fills elapsed time', () => {
   const model = fresh(), first = add(model, 'First', 30), second = add(model, 'Second', 30), pinned = add(model, 'Pinned', 30), running = add(model, 'Running', 30);
-  pinned.slot = 8; pinned.pinned = true; running.slot = 24; core.startItem(model, running.id, ms('2026-10-12T14:00:00+08:00'));
-  core.replan(model, { now: ms('2026-10-12T16:00:00+08:00') }); assert.equal(first.slot, 32); assert.equal(second.slot, 34); assert.equal(pinned.slot, 8); assert.equal(running.slot, 24);
-  core.replan(model, { now: ms('2026-10-12T16:00:01+08:00') }); assert.equal(first.slot, 33, 'seconds after the boundary round forward');
-  const result = core.replan(model, { now: ms('2026-10-12T18:00:00+08:00') }); assert.equal(first.slot, null); assert.equal(second.slot, null); assert.equal(result.overflow.length, 2); assert.equal(pinned.slot, 8); assert.equal(running.slot, 24);
-  core.replan(model, { now: ms('2026-10-12T18:00:00+08:00'), allowOvertime: true }); assert.equal(first.slot, 40); assert.equal(second.slot, 42);
+  pinned.slot = 40; pinned.pinned = true; running.slot = 56; core.startItem(model, running.id, ms('2026-10-12T14:00:00+08:00'));
+  core.replan(model, { now: ms('2026-10-12T16:00:00+08:00') }); assert.equal(first.slot, 64); assert.equal(second.slot, 66); assert.equal(pinned.slot, 40); assert.equal(running.slot, 56);
+  core.replan(model, { now: ms('2026-10-12T16:00:01+08:00') }); assert.equal(first.slot, 65, 'seconds after the boundary round forward');
+  const result = core.replan(model, { now: ms('2026-10-12T18:00:00+08:00') }); assert.equal(first.slot, null); assert.equal(second.slot, null); assert.equal(result.overflow.length, 2); assert.equal(pinned.slot, 40); assert.equal(running.slot, 56);
+  core.replan(model, { now: ms('2026-10-12T18:00:00+08:00'), allowOvertime: true }); assert.equal(first.slot, 72); assert.equal(second.slot, 74);
 });
 test('overflow stays unscheduled; overtime requires explicit choice; weekends have no normal capacity', () => {
   const model = fresh(), a = add(model, 'Full day', 600), b = add(model, 'Another', 120);
-  const normal = core.replan(model, { now: monday }); assert.equal(a.slot, null); assert(normal.overflow.includes(a)); assert(b.slot >= 3);
-  const overtime = core.replan(model, { allowOvertime: true, now: monday }); assert.equal(overtime.overflow.length, 0); assert.equal(a.slot, 0); assert.equal(b.slot, 40);
+  const normal = core.replan(model, { now: monday }); assert.equal(a.slot, null); assert(normal.overflow.includes(a)); assert(b.slot >= 35);
+  const overtime = core.replan(model, { allowOvertime: true, now: monday }); assert.equal(overtime.overflow.length, 0); assert.equal(a.slot, 32); assert.equal(b.slot, 72);
   model.day = '2026-10-11'; model.tasks.forEach(t=>t.date=model.day); assert.equal(core.replan(model, { now: monday }).overflow.length, 2); assert.equal(a.slot, null); assert.equal(b.slot, null);
 });
 test('timer pause/resume accumulates only its task and conflict never silently switches tasks', () => {
@@ -123,16 +123,16 @@ test('reports merge nested/adjacent overlaps without double count and empty stat
   assert.deepEqual(core.mergeIntervals([[0, 100], [10, 30], [90, 200], [200, 250], [300, 350], [9, 9]]), [[0, 250], [300, 350]]);
   const report = core.computeReport([], 'This month', monday); assert.equal(report.total, 0); assert.equal(report.normal, 0); assert.equal(report.overtime, 0); assert.deepEqual(report.activities, []);
 });
-test('timer formatting does not wrap after 24 hours', () => { assert.equal(core.clockText(25 * 3600000 + 2000), '25:00:02'); assert.equal(core.slotLabel(48), '20:00'); });
+test('timer formatting does not wrap after 24 hours', () => { assert.equal(core.clockText(25 * 3600000 + 2000), '25:00:02'); assert.equal(core.slotLabel(96), '24:00'); });
 
 test('scheduled meetings count elapsed time automatically without creating sessions', () => {
-  const model=fresh();model.meetings.push({id:'m',name:'Scheduled call',kind:'client',project:'Client portal',date:model.day,slot:4,estimateMinutes:60});
+  const model=fresh();model.meetings.push({id:'m',name:'Scheduled call',kind:'client',project:'Client portal',date:model.day,slot:36,estimateMinutes:60});
   const report=core.computeReport(core.reportEntries(model),'Today',ms('2026-10-12T09:30:00+08:00'));
   assert.equal(report.total,30*60000);assert.equal(report.activities[0].source,'Scheduled estimate');assert.equal(model.sessions.length,0);
   assert.equal(core.computeReport(core.reportEntries(model),'Today',monday).total,0);
 });
 test('manual meeting corrections override timers; timers override estimate; overlaps count once', () => {
-  const model=fresh();model.meetings.push({id:'m',name:'Call',kind:'client',date:model.day,slot:4,estimateMinutes:60});
+  const model=fresh();model.meetings.push({id:'m',name:'Call',kind:'client',date:model.day,slot:36,estimateMinutes:60});
   model.sessions.push(session('m','2026-10-12T09:10:00+08:00','2026-10-12T09:20:00+08:00',{kind:'meeting'}));
   let report=core.computeReport(core.reportEntries(model),'Today',ms('2026-10-12T12:00:00+08:00'));assert.equal(report.total,10*60000);assert.equal(report.activities[0].source,'Actual timer');
   Object.assign(model.meetings[0],{actualStart:'2026-10-12T09:15:00+08:00',actualEnd:'2026-10-12T09:30:00+08:00'});
@@ -142,10 +142,51 @@ test('manual meeting corrections override timers; timers override estimate; over
 });
 test('minutes scheduling upserts linked calendar record and preserves exact non-quarter time', () => {
   const model=fresh(),record={id:'minutes-1',title:'Discussion',date:model.day,time:'09:07',durationMinutes:20};
-  core.upsertMeeting(model,record,'Client portal');assert.equal(model.meetings.length,1);assert.equal(model.meetings[0].slot,4);assert.equal(Date.parse(model.meetings[0].scheduledStart),ms('2026-10-12T09:07:00+08:00'));
+  core.upsertMeeting(model,record,'Client portal');assert.equal(model.meetings.length,1);assert.equal(model.meetings[0].slot,36);assert.equal(Date.parse(model.meetings[0].scheduledStart),ms('2026-10-12T09:07:00+08:00'));
   assert.equal(core.computeReport(core.reportEntries(model),'Today',ms('2026-10-12T10:00:00+08:00')).total,20*60000);
-  record.time='11:00';record.title='Renamed';core.upsertMeeting(model,record,'Client portal');assert.equal(model.meetings.length,1);assert.equal(model.meetings[0].name,'Renamed');assert.equal(model.meetings[0].slot,12);
+  record.time='11:00';record.title='Renamed';core.upsertMeeting(model,record,'Client portal');assert.equal(model.meetings.length,1);assert.equal(model.meetings[0].name,'Renamed');assert.equal(model.meetings[0].slot,44);
   record.time='';core.upsertMeeting(model,record,'Client portal');assert.equal(model.meetings.length,0);
+});
+
+
+test('24-hour placement accepts midnight and the final quarter without shifting prior records', () => {
+  const model = fresh(), task = add(model, 'Midnight', 15);
+  assert.equal(core.moveItem(model, task.id, 0).ok, true);
+  assert.equal(core.moveItem(model, task.id, 95).ok, true);
+  assert.equal(core.slotLabel(task.slot), '23:45');
+  assert.equal(core.moveItem(model, task.id, 96).ok, false);
+  const legacy = { ...fresh(), tasks: [{ ...task, slot: 3 }], meetings: [{ id:'legacy-meeting', kind:'client', date:model.day, slot:12, estimateMinutes:30 }] };
+  delete legacy.slotOrigin;
+  core.normalizeModel(legacy);
+  assert.equal(legacy.tasks[0].slot, 35); assert.equal(legacy.meetings[0].slot, 44);
+  core.normalizeModel(legacy); assert.equal(legacy.tasks[0].slot, 35);
+});
+test('explicit overlapping moves keep both times and produce distinct layout lanes', () => {
+  const model = fresh(), first = add(model, 'First', 30), second = add(model, 'Second', 60);
+  first.slot = 36; second.slot = 40;
+  assert.equal(core.moveItem(model, second.id, 36, { allowOverlap: true }).ok, true);
+  assert.equal(first.slot, 36); assert.equal(second.slot, 36);
+  const entries = core.calendarLayout(model);
+  assert.deepEqual(entries.map(entry => entry.lanes), [2, 2]);
+  assert.notEqual(entries[0].lane, entries[1].lane);
+  assert.equal(entries.find(entry => entry.item === first).end - entries.find(entry => entry.item === first).start, 30);
+  assert.equal(core.moveItem(model, first.id, null).ok, true);
+  assert.equal(core.calendarLayout(model).length, 1); assert.equal(model.tasks.length, 2);
+});
+test('layout clips cross-midnight meetings and shares lanes only for connected overlaps', () => {
+  const model = fresh();
+  core.upsertMeeting(model, { id:'overnight', title:'Overnight', date:'2026-10-11', time:'23:45', durationMinutes:60 });
+  core.upsertMeeting(model, { id:'exact', title:'Exact', date:model.day, time:'00:07', durationMinutes:20 });
+  core.upsertMeeting(model, { id:'later', title:'Later', date:model.day, time:'01:00', durationMinutes:15 });
+  const entries = core.calendarLayout(model);
+  assert.equal(entries[0].start, 0); assert.equal(entries[0].end, 45); assert.equal(entries[0].continuesBefore, true);
+  assert.equal(entries[1].start, 7); assert.equal(entries[1].end, 27); assert.equal(entries[1].lanes, 2);
+  assert.equal(entries[2].lanes, 1); assert.equal(entries[2].lane, 0);
+  const task = add(model, 'Blocked by yesterday', 15);
+  assert.equal(core.canPlace(model, task, 0), false); assert.equal(core.canPlace(model, task, 3), true);
+  assert.equal(core.moveItem(model, 'calendar-exact', 95, { allowOverlap:true }).ok, false, '20 minutes does not fit final quarter');
+  core.upsertMeeting(model, { id:'short', title:'Short exact', date:model.day, time:'09:07', durationMinutes:10 });
+  assert.equal(core.moveItem(model, 'calendar-short', 95, { allowOverlap:true }).ok, true);
 });
 
 // Small inert DOM to exercise generated forms/handlers. It performs no rendering,
@@ -153,13 +194,14 @@ test('minutes scheduling upserts linked calendar record and preserves exact non-
 let inertFocus = null;
 const decode = text => text.replaceAll('&amp;', '&').replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&quot;', '"').replaceAll('&#39;', "'");
 class Element {
-  constructor(tag = 'div', attributes = {}) { this.tagName = tag; this.attributes = { ...attributes }; this.childNodes = []; this.parentNode = null; this.dataset = {}; this.style = {}; this.textContent = ''; this.value = attributes.value || ''; this.hidden = 'hidden' in attributes; this.open = false; this.offsetTop = 0; this.offsetHeight = 32; this.classList = { contains: value => this.className.split(' ').includes(value) }; Object.keys(attributes).filter(k => k.startsWith('data-')).forEach(k => { this.dataset[k.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = attributes[k]; }); }
+  constructor(tag = 'div', attributes = {}) { this.tagName = tag; this.attributes = { ...attributes }; this.childNodes = []; this.parentNode = null; this.dataset = {}; this.style = {}; this.textContent = ''; this.value = attributes.value || ''; this.hidden = 'hidden' in attributes; this.open = false; this.offsetTop = 0; this.offsetHeight = 32; this.listeners = {}; this.classList = { add: v => { this.className += ' '+v; }, contains: value => this.className.split(' ').includes(value) }; Object.keys(attributes).filter(k => k.startsWith('data-')).forEach(k => { this.dataset[k.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = attributes[k]; }); }
   get id() { return this.attributes.id; } set id(value) { this.attributes.id = value; }
   get className() { return this.attributes.class || ''; } set className(value) { this.attributes.class = value; }
   setAttribute(key, value) { this.attributes[key] = String(value); }
   append(...nodes) { nodes.forEach(node => { node.parentNode = this; this.childNodes.push(node); }); }
   replaceChildren(...nodes) { this.childNodes.forEach(n => { n.parentNode = null; }); this.childNodes = []; this.append(...nodes); }
-  focus() { this.focused = true; inertFocus = this; } close() { this.open = false; }
+  addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); } showModal() { this.open = true; }
+  focus() { this.focused = true; inertFocus = this; } close() { this.open = false; for (const fn of this.listeners.close || []) fn(); }
   matches(selector) {
     const match = selector.match(/^([\w-]+)?(?:\.([\w-]+))?(?:\[([^=\]]+)(?:="([^"]*)")?\])?$/);
     if (!match) return false;
@@ -185,21 +227,22 @@ test('inert DOM smoke: initialization, task form validation, exact Move, session
   const root = new Element(), ids = ['schedule', 'backlog', 'backlog-count', 'timer-name', 'timer-value', 'pause', 'finish', 'simulate', 'replan', 'new', 'period', 'total', 'normal', 'overtime', 'modal'];
   ids.forEach(id => root.append(new Element(id === 'period' ? 'select' : 'div', { id })));
   const reports = new Element('div', { id: 'reports', class: 'view hidden' }); reports.append(new Element('section', { class: 'panel' })); root.append(reports);
-  const get = id => root.querySelector('[id="' + id + '"]'), document = { getElementById: get, createElement: tag => new Element(tag), get activeElement() { return inertFocus; } };
+  const get = id => root.querySelector('[id="' + id + '"]'), document = { body:root, getElementById: get, querySelector: selector => root.querySelector(selector), createElement: tag => new Element(tag), get activeElement() { return inertFocus; } };
   get('period').value = 'This week'; let time = monday, toast = '', modalText = '';
   const api = globalThis.createDayPlanner({ document, now: () => time, setInterval: null, model: fresh(), projectOptions: () => ['Client portal'], toast: text => { toast = text; }, modal: html => { modalText = html; get('modal').innerHTML = html; get('modal').open = true; } });
-  assert.equal(get('schedule').querySelectorAll('[data-planner-slot]').length, 48); assert.equal(get('total').textContent, '0s');
+  assert.equal(get('schedule').querySelectorAll('[data-planner-slot]').length, 96); assert.equal(get('total').textContent, '0s');
   get('new').onclick(); assert(modalText.includes('Project (optional)')); get('dp-name').value = 'Follow up'; get('dp-estimate').value = '0'; get('dp-task-form').onsubmit({ preventDefault() {} }); assert.equal(api.tasks.length, 0); assert(get('dp-estimate-error').textContent.includes('whole number'));
   get('dp-estimate').value = '20'; get('dp-priority').value = 'High'; get('dp-due').value = '2026-10-15'; get('dp-project').value = 'Client portal'; get('dp-task-form').onsubmit({ preventDefault() {} }); assert.equal(api.tasks.length, 1); assert.equal(api.tasks[0].priority, 'High'); assert.equal(get('modal').open, false);
-  const card = get('backlog').querySelector('[data-planner-item]'); card.querySelectorAll('button').find(b => b.textContent === 'Move').onclick(); get('dp-move-slot').value = '17'; get('dp-move-form').onsubmit({ preventDefault() {} }); assert.equal(api.tasks[0].slot, 17); assert.equal(get('modal').open, false);
-  assert.equal(inertFocus.dataset.plannerAction, 'move', 'Move restores focus to the corresponding newly rendered control');
-  let scheduled = get('schedule').querySelector('[data-planner-item]'); scheduled.querySelector('[data-planner-action="unpin"]').onclick(); assert.equal(api.tasks[0].pinned, false); assert.equal(inertFocus.dataset.plannerAction, 'timer', 'removed Unpin returns focus to a remaining task control');
-  scheduled = get('schedule').querySelector('[data-planner-item]'); const startButton = scheduled.querySelector('[data-planner-action="timer"]'); startButton.focus(); startButton.onclick(); assert.equal(inertFocus.dataset.plannerAction, 'timer'); assert.notEqual(inertFocus, startButton, 'Start focuses the replacement button after rendering'); assert.equal(inertFocus.textContent, 'Pause');
-  inertFocus.onclick(); assert.equal(inertFocus.dataset.plannerAction, 'timer'); assert.equal(inertFocus.textContent, 'Resume', 'Pause focuses the replacement Resume button'); inertFocus.onclick();
+  const card = get('backlog').querySelector('[data-planner-item]'); card.querySelectorAll('button').find(b => b.textContent === 'Reschedule').onclick(); get('dp-move-slot').value = '17'; get('dp-move-form').onsubmit({ preventDefault() {} }); assert.equal(api.tasks[0].slot, 17); assert.equal(get('modal').open, false);
+  assert.equal(inertFocus.dataset.plannerItem, String(api.tasks[0].id), 'Move returns focus to the compact calendar button');
+  let scheduled = get('schedule').querySelector('[data-planner-item]'); assert.equal(scheduled.querySelectorAll('button').length,0,'Calendar block contains no nested controls'); scheduled.onclick(); assert.equal(get('dp-detail').open,true);
+  get('dp-detail-body').querySelector('[data-planner-action="unpin"]').onclick(); assert.equal(api.tasks[0].pinned,false);
+  get('dp-detail-body').querySelector('[data-planner-action="timer"]').onclick(); assert.equal(inertFocus.textContent,'Pause'); inertFocus.onclick(); assert.equal(inertFocus.textContent,'Resume');
+  get('dp-detail-close').onclick();
   api.start(api.tasks[0].id); time += 60000; api.tick(); assert.equal(get('timer-value').textContent, '00:01:00'); get('pause').onclick(); assert.equal(get('pause').textContent, 'Resume'); time += 60000; get('pause').onclick(); time += 60000; get('finish').onclick(); assert.equal(api.tasks[0].status, 'Completed'); assert.equal(get('timer-value').textContent, '00:02:00'); assert.equal(get('finish').disabled, true); assert(get('backlog').querySelector('summary').textContent.includes('Completed'));
   api.addAction('opportunity:3', { id: 'action-3', title: 'Call contact', due: '2026-10-15' }, { id: 3, name: 'New lead' }); assert.equal(api.tasks[1].due, '2026-10-15'); assert.equal(api.tasks[1].opportunityId, 3); api.addAction('opportunity:3', { id: 'action-3', title: 'Call contact' }, { id: 3, name: 'New lead' }); assert.equal(api.tasks.length, 2); assert(toast.includes('already'));
   get('period').value = 'All time'; get('period').onchange(); assert.equal(get('total').textContent, '0h 02m'); assert.equal(get('overtime').textContent, '0h 02m'); assert.equal(get('normal').textContent, '0s'); assert(get('day-time-breakdown').innerHTML.includes('Follow up')); assert(get('day-time-breakdown').innerHTML.includes('class="register-table"')); assert.equal(get('day-time-breakdown').querySelectorAll('[data-label]').length, 4);
-  time = ms('2026-10-12T14:20:00+08:00'); api.meetings.push({ id: 'late-meeting', name: 'Late alert call', kind: 'client', date: api.model.day, slot: 24, estimateMinutes: 60 }); api.start(api.tasks[1].id); api.tick(); assert.equal(get('modal').open, true); assert(modalText.includes('Late alert call'), 'a delayed tick warns during the whole meeting, not only its first minute'); get('dp-continue-overlap').onclick(); time += 60000; api.tick(); assert.equal(get('modal').open, false, 'the overlap warning is shown once');
-  time = ms('2026-10-12T16:00:00+08:00'); const late = add(api.model, 'Late work', 30); api.replan({ allowOvertime: false }); assert(late.slot >= 32, 'public API passes current time into replan'); api.destroy();
+  time = ms('2026-10-12T14:20:00+08:00'); api.meetings.push({ id: 'late-meeting', name: 'Late alert call', kind: 'client', date: api.model.day, slot: 56, estimateMinutes: 60 }); api.start(api.tasks[1].id); api.tick(); assert.equal(get('modal').open, true); assert(modalText.includes('Late alert call'), 'a delayed tick warns during the whole meeting, not only its first minute'); get('dp-continue-overlap').onclick(); time += 60000; api.tick(); assert.equal(get('modal').open, false, 'the overlap warning is shown once');
+  time = ms('2026-10-12T16:00:00+08:00'); const late = add(api.model, 'Late work', 30); api.replan({ allowOvertime: false }); assert(late.slot >= 64, 'public API passes current time into replan'); api.destroy();
 });
 console.log('\n' + count + ' day planner checks passed. Pure model and inert DOM checks; no browser rendering asserted.');

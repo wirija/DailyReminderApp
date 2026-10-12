@@ -18,7 +18,7 @@ class AssetParser(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         values = dict(attrs)
-        if tag == 'script' and values.get('src'):
+        if tag in {'script', 'img'} and values.get('src'):
             self.files.add(values['src'])
         if tag == 'link' and values.get('rel') in {'stylesheet', 'icon', 'apple-touch-icon', 'manifest'}:
             self.files.add(values['href'])

@@ -89,7 +89,7 @@ body.innerHTML = html.slice(html.indexOf('<div class="shell">'), html.indexOf('<
 const frozenNow = Date.parse('2026-10-12T10:00:00+08:00');
 class TestDate extends Date { constructor(...args) { super(...(args.length ? args : [frozenNow])); } static now() { return frozenNow; } }
 let intervalCount = 0;
-const context = { document, console, Date: TestDate, Intl, TextEncoder, TextDecoder, Uint8Array, ArrayBuffer, Blob, URL, setTimeout: () => 1, clearTimeout() {}, setInterval: () => ++intervalCount, clearInterval() {}, queueMicrotask, FormData: class { constructor(form) { this.form = form; } entries() { return this.form.querySelectorAll('input,select,textarea').filter(n => n.name && !n.disabled && (!(n.attrs.type === 'checkbox' || n.attrs.type === 'radio') || n.checked)).map(n => [n.name, n.value]); } }, confirm: () => { throw new Error('Unexpected native confirm in test'); } };
+const context = { MutationObserver: class { observe() {} disconnect() {} }, matchMedia: () => ({ matches: false, addEventListener() {} }), document, console, Date: TestDate, Intl, TextEncoder, TextDecoder, Uint8Array, ArrayBuffer, Blob, URL, setTimeout: () => 1, clearTimeout() {}, setInterval: () => ++intervalCount, clearInterval() {}, queueMicrotask, FormData: class { constructor(form) { this.form = form; } entries() { return this.form.querySelectorAll('input,select,textarea').filter(n => n.name && !n.disabled && (!(n.attrs.type === 'checkbox' || n.attrs.type === 'radio') || n.checked)).map(n => [n.name, n.value]); } }, confirm: () => { throw new Error('Unexpected native confirm in test'); } };
 context.window = context; context.self = context; context.globalThis = context;
 vm.createContext(context);
 const loadedScripts = [];
@@ -102,7 +102,7 @@ let count = 0; function test(name, fn) { fn(); count++; console.log('PASS ' + na
 test('all real modules initialize in actual HTML order without missing-element fallbacks', () => {
   assert(loadedScripts.includes('vendor/jszip.min.js')); assert(loadedScripts.includes('day-planner.js')); assert(loadedScripts.includes('review-ui.js')); assert.equal(typeof context.JSZip, 'function'); assert.equal(intervalCount, 1);
   assert($('meeting-workspace')); assert($('register-rows').innerHTML.includes('PRJ-001')); assert($('client-rows').innerHTML.includes('Client A')); assert($('opportunity-rows').innerHTML.includes('Reporting automation'));
-  assert.equal($('schedule').querySelectorAll('[data-planner-slot]').length, 48); assert.equal($('total').textContent, '0s');
+  assert.equal($('schedule').querySelectorAll('[data-planner-slot]').length, 96); assert.equal($('total').textContent, '0s');
 });
 test('navigation and grouped project tabs reveal the correct panels and remember category choice', () => {
   app.view('projects'); app.showProject(app.projectRecords[0].name);
@@ -131,8 +131,8 @@ test('actual action-list schedule handler creates one My day task with retained 
   button.click(); assert.equal(app.tasks.length, before + 1); assert($('toast').textContent.includes('already'));
 });
 test('saved work refreshes project attention and escapes task names in summary markup', () => {
-  app.view('projects'); const project = app.projectRecords[0]; app.showProject(project.name); assert(project.plan?.[0]?.children.length);
-  const work = project.plan[0].children[0]; work.name = '<img src=x onerror="bad()">'; work.status = 'Blocked'; work.team = 'Hanoi'; work.end = '2026-10-01'; work.children = [];
+  app.view('projects'); const project = app.projectRecords[0]; app.showProject(project.name); assert(project.plan?.some(phase=>phase.children.length));
+  const work = project.plan.find(phase=>phase.children.length).children[0]; work.name = '<img src=x onerror="bad()">'; work.status = 'Blocked'; work.team = 'Hanoi'; work.end = '2026-10-01'; work.children = [];
   app.refreshProjectSignals(project); const html = $('portfolio-rows').innerHTML;
   assert(html.includes('&lt;img src=x onerror=&quot;bad()&quot;&gt;')); assert(!html.includes('<img src=x')); assert.equal($('portfolio-rows').querySelectorAll('img').length, 0); assert($('overview-signals').textContent.includes('blocked work item'));
   work.status = 'Done'; app.refreshProjectSignals(project); assert(!$('overview-signals').textContent.includes('1 blocked work item')); assert(project.hn[0] >= 1);

@@ -445,6 +445,16 @@ class Writer:
         if not isinstance(model, dict):
             raise ValidationError('Planner must be an object.')
         day = parsedate(model.get('day')) or timezone.localdate()
+        # Older browser snapshots used 08:00 as slot zero. Only interpret the
+        # incoming coordinates here; canonical database timestamps never move
+        # when the browser migrates to midnight-relative slots.
+        origin = model.get('slotOrigin', 480)
+        if type(origin) not in (int, float) or not 0 <= origin < 1440 or origin % 15:
+            raise ValidationError('The planner slot origin must be a 15-minute offset within the day.')
+
+        def slot_start(item):
+            return at(item.get('date') or iso(day), '00:00') + timedelta(minutes=origin + int(item.get('slot') or 0) * 15)
+
         for item in entries(model, 'tasks') + entries(model, 'meetings'):
             is_meeting = item in model.get('meetings', [])
             project = self.projects.get(item.get('project'))
@@ -461,7 +471,7 @@ class Writer:
                             pass
                     if not meeting:
                         raise ValidationError('This meeting no longer exists. Reload before saving.')
-                start = parsedatetime(item.get('scheduledStart')) or at(item.get('date') or iso(day), '08:00') + timedelta(minutes=int(item.get('slot') or 0) * 15)
+                start = parsedatetime(item.get('scheduledStart')) or slot_start(item)
                 if not meeting:
                     meeting = self.put(m.Meeting, {**item, 'id': 'day-' + str(item['id']), 'serverId': None},
                         {'title': item['name'], 'starts_at': start, 'duration_minutes': int(item.get('estimateMinutes') or int(item.get('length') or 4) * 15),
@@ -470,8 +480,9 @@ class Writer:
                     before = snapshot(meeting)
                     meeting.starts_at = start
                     meeting.duration_minutes = int(item.get('estimateMinutes') or int(item.get('length') or 4) * 15)
-                    meeting.metadata['date'] = iso(start.date())
-                    meeting.metadata['time'] = start.strftime('%H:%M')
+                    local_start = timezone.localtime(start, ZONE)
+                    meeting.metadata['date'] = iso(local_start.date())
+                    meeting.metadata['time'] = local_start.strftime('%H:%M')
                     meeting.save()
                     record_event(self.user, meeting, 'rescheduled', before, reason='Moved manually in My day.')
                 if 'actualStart' in item or 'actualEnd' in item:
@@ -492,7 +503,7 @@ class Writer:
                 'notes': item.get('notes', '')}, scope)
             self.activities[str(item['id'])] = row
             if item.get('slot') is not None and row.status != 'done':
-                start = meeting.starts_at if meeting else at(item.get('date') or iso(day), '08:00') + timedelta(minutes=int(item['slot']) * 15)
+                start = meeting.starts_at if meeting else slot_start(item)
                 self.put(m.ScheduleBlock, {'id': 'schedule-' + str(item['id'])}, {'starts_at': start,
                     'ends_at': start + timedelta(minutes=duration), 'pinned': bool(item.get('pinned') or is_meeting)}, {'activity': row})
             else:
@@ -653,7 +664,7 @@ def read_workspace(user, state):
         blocks = list(a.blocks.order_by('starts_at'))
         block = next((b for b in blocks if timezone.localtime(b.starts_at, ZONE).date() == a.planned_date), blocks[0] if blocks else None)
         activity_date = iso(timezone.localtime(block.starts_at, ZONE).date()) if block else iso(a.planned_date) or day
-        slot = int((timezone.localtime(block.starts_at, ZONE) - at(activity_date, '08:00')).total_seconds() / 900) if block else None
+        slot = int((timezone.localtime(block.starts_at, ZONE) - at(activity_date, '00:00')).total_seconds() / 900) if block else None
         common = {**base(a), 'name': a.title, 'project': a.project.name if a.project_id else 'General',
                   'estimateMinutes': a.estimated_minutes, 'slot': slot, 'notes': a.notes,
                   'createdAt': int(a.created_at.timestamp() * 1000)}
@@ -661,7 +672,7 @@ def read_workspace(user, state):
             seen_meetings.add(a.meeting_id)
             start = timezone.localtime(a.meeting.starts_at, ZONE)
             meetings.append({**common, 'meetingId': key(a.meeting), 'date': iso(start.date()),
-                'slot': int((start - at(iso(start.date()), '08:00')).total_seconds() / 900),
+                'slot': int((start - at(iso(start.date()), '00:00')).total_seconds() / 900),
                 'length': max(1, (a.meeting.duration_minutes + 14) // 15), 'kind': a.meeting.kind,
                 'scheduledStart': iso(a.meeting.starts_at),
                 'actualStart': iso(a.meeting.actual_start) or None, 'actualEnd': iso(a.meeting.actual_end) or None})
@@ -679,11 +690,11 @@ def read_workspace(user, state):
         start = timezone.localtime(meeting.starts_at, ZONE)
         meetings.append({'id': 'calendar-' + key(meeting), 'meetingId': key(meeting), 'name': meeting.title,
             'project': meeting.project.name if meeting.project_id else 'General', 'date': iso(start.date()),
-            'slot': int((start - at(iso(start.date()), '08:00')).total_seconds()/900),
+            'slot': int((start - at(iso(start.date()), '00:00')).total_seconds()/900),
             'length': max(1,(meeting.duration_minutes+14)//15), 'estimateMinutes': meeting.duration_minutes,
             'scheduledStart': iso(meeting.starts_at),
             'kind': meeting.kind, 'actualStart': iso(meeting.actual_start) or None, 'actualEnd': iso(meeting.actual_end) or None})
-    planner = {**prefs, 'day': day, 'serial': prefs.get('serial', 100), 'tasks': tasks, 'meetings': meetings,
+    planner = {**prefs, 'slotOrigin': 0, 'day': day, 'serial': prefs.get('serial', 100), 'tasks': tasks, 'meetings': meetings,
                'sessions': sessions, 'currentTaskId': prefs.get('currentTaskId')}
     members = [{**base(t), 'name': t.name, 'team': t.team, 'email': t.email, 'role': t.role, 'active': t.active}
                for t in m.TeamMember.objects.filter(workspace=user, active=True).order_by('name')]
